@@ -6,7 +6,9 @@ class NE_regret:
         #temp_graph = nx.Graph()
         #self.topology = temp_graph.add_edges_from(self.topology_edges)
         #self.num_nodes = self.topology.number_of_nodes()
-        self.strategies_gen = list(self.sums(5, self.resources))
+        self.edges_repeated = [inner for outer in self.topology_edges for inner in outer]
+        self.num_nodes = len(set(self.edges_repeated))
+        self.strategies_gen = list(self.sums(self.num_nodes, self.resources))
         self.payoff_matrix = self.create_payoff_matrix_full(self.strategies_gen)
         self.DEFENDER_ACTION_LENGTH = len(self.strategies_gen)
         self.ATTACKER_ACTION_LENGTH = len(self.strategies_gen)
@@ -16,7 +18,9 @@ class NE_regret:
         self.attacker_strategy     = np.full((self.ATTACKER_ACTION_LENGTH), 1/self.ATTACKER_ACTION_LENGTH)
         self.attacker_regret_sum   = np.zeros((self.ATTACKER_ACTION_LENGTH))
         self.attacker_strategy_sum = 0
-        
+
+    # Number of Solutions
+    # (Total Sum + Length - 1) Choose (Length - 1)   
     def sums(self, length, total_sum):
         if length == 1:
             yield [total_sum,]
@@ -25,16 +29,26 @@ class NE_regret:
                 for permutation in self.sums(length - 1, total_sum - value):
                     yield [value,] + permutation
     
+    def utility(self, game, evaluation_function):
+      if evaluation_function == "giant_c":
+        return game.giant_component_length
+      elif evaluation_function == "average_node":
+        return game.average_node_connectivity
+      else:
+        return  game.giant_component_length + game.average_node_connectivity
+
     #Get all strategies
     def create_payoff_matrix_full(self, data):
         payoff_matrix = [[0]*len(data) for i in range(len(data))]
+        print("Length of payoff matrix: ", len(payoff_matrix))
         for defense_strategy_index in range(len(data)):
+            print(("Row: ", defense_strategy_index), end = " ")
             for attacker_strategy_index in range(len(data)):
                 current_graph = nx.Graph()
                 current_graph.add_edges_from(self.topology_edges)
                 Simulation_Game = Game(current_graph, self.resources)
                 Simulation_Game.fight(show=False, d_strategy = data[defense_strategy_index], a_strategy = data[attacker_strategy_index])
-                payoff_matrix[defense_strategy_index][attacker_strategy_index] = Simulation_Game.giant_component_length
+                payoff_matrix[defense_strategy_index][attacker_strategy_index] = self.utility(Simulation_Game, "other")
                 plt.clf()
         #print(len(payoff_matrix)) 
         payoff_matrix_np = np.array(payoff_matrix)
@@ -100,14 +114,3 @@ class NE_regret:
       '''
       for i in range(iterations):
         self.update_strategy(self.get_defender_action(), self.get_attacker_action(), intelligent_defender, intelligent_attacker)
-    
-test_graph = nx.Graph()
-test_graph.add_edges_from([(0,1), (1,2), (2,3), (3,4)])
-
-
-nx.draw(test_graph, node_size = 300, with_labels=True)
-
-t = NE_regret([(0,1), (1,2), (2,3), (3,4)], 6)
-t.train(2000, intelligent_defender = True, intelligent_attacker = False)
-ds = t.defender_strategy
-strats = t.strategies_gen
